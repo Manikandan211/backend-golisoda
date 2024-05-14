@@ -291,36 +291,37 @@ function getProductApiData($product_data, $customer_id = '', $variation_option_i
 
     $pro                    = [];
     $total_variation_amount = 0;
+    $default_value = [];
+
     if (isset($variation_option_id) && !empty($variation_option_id)) {
         $variation_option_data = ProductVariationOption::whereIn('id', $variation_option_id)
             ->where('product_id', $product_data->id)
             ->selectRaw("SUM(amount) AS total_amount")
             ->groupBy('product_id')
             ->get();
-        if(isset($variation_option_data)){
-        $total_variation_amount = $variation_option_data[0]->total_amount;
-
+        if (isset($variation_option_data)) {
+            $total_variation_amount = $variation_option_data[0]->total_amount;
         }
-
-    }else{
+    } else {
         $variation_option_data = ProductVariationOption::where('product_id', $product_data->id)
-        ->where('is_default', 1)
-        ->get();   
-    if(isset($variation_option_data)){
-       
-        $default_value = [];
-        foreach ($variation_option_data as $value) {
-          
-            $variation = Variation::where('id', $value->variation_id)->first();
-            if($variation){
-                $title = $variation->title ?? '';
-                $id = $value->id ?? '';           
-                $default_value[$title] = $id;
-            }   
+            ->where('is_default', 1)
+            ->get();
+
+        if (isset($variation_option_data)) {
+
+            foreach ($variation_option_data as $value) {
+
+                $variation = Variation::where('id', $value->variation_id)->first();
+                if ($variation) {
+                    $title = $variation->title ?? '';
+                    $id = $value->id ?? '';
+                    $default_value[$title] = $id;
+                    $total_variation_amount = $total_variation_amount + $value->amount;
+                }
+            }
         }
-    } 
     }
-    $pro['default_value ']= $default_value;
+    $pro['default_value '] = $default_value;
     $pro['total_variation_amount'] = $total_variation_amount;
     if ($price_data['overall_discount_percentage'] != 0) {
         $pro['price']           = $price_data['price'] + $total_variation_amount;
