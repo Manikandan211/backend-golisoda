@@ -17,11 +17,13 @@ use App\Models\Master\State;
 use App\Models\Product\Product;
 use App\Models\Wishlist;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Mail;
 use Carbon\Carbon;
 use Auth;
+
 class CustomerController extends Controller
 {
     public function verifyAccount(Request $request)
@@ -31,14 +33,14 @@ class CustomerController extends Controller
         $error    = 1;
         $message  = 'Token Expired';
         $customer = Customer::with('customerAddress')->where('email', $email)->whereNull('deleted_at')->first();
-        if( $customer ) {
-            if( !empty($customer->verification_token) ) {
+        if ($customer) {
+            if (!empty($customer->verification_token)) {
                 $customer->email_verified_at  = Carbon::now();
                 $customer->verification_token = null;
                 $customer->update();
                 $error   = 0;
                 $message = 'Account Verified Succesfully';
-            } 
+            }
         }
 
         return array('error' => $error, 'message' => $message, 'customer' => $customer);
@@ -46,7 +48,7 @@ class CustomerController extends Controller
 
     public function registerCustomer(Request $request)
     {
-       
+
         Validator::make($request->all(), [
             'first_name' => 'required|string',
             'last_name'  => 'required|string',
@@ -72,17 +74,17 @@ class CustomerController extends Controller
             $emailTemplate = EmailTemplate::select('email_templates.*')
                 ->join('sub_categories', 'sub_categories.id', '=', 'email_templates.type_id')
                 ->where('sub_categories.slug', 'new-registration')->first();
-                
-                // $link = 'http://192.168.0.35:2000/verify-account/' . $token_id;
-                // $link = 'https://gbs-dev.vercel.app/verify-account/' . $token_id;
-                // $link = 'https://beta.gbssystems.com/verify-account/' . $token_id;
+
+            // $link = 'http://192.168.0.35:2000/verify-account/' . $token_id;
+            // $link = 'https://gbs-dev.vercel.app/verify-account/' . $token_id;
+            // $link = 'https://beta.gbssystems.com/verify-account/' . $token_id;
             $globalInfo                        = GlobalSettings::first();
             $link                              = 'https://golisodastore.com/verify-account/' . $token_id;
             $customer_data->verification_token = $token_id;
             $customer_data->update();
 
             $extract = array(
-                'name'              => $request->first_name." ".$request->last_name,
+                'name'              => $request->first_name . " " . $request->last_name,
                 'regards'           => $globalInfo->site_name,
                 'link'              => '<a href="' . $link . '"> Verify Account </a>',
                 'company_website'   => '',
@@ -97,7 +99,7 @@ class CustomerController extends Controller
             eval("\$templateMessage = \"$templateMessage\";");
 
             try {
-                
+
                 $bccEmails = explode(',', env('EMAILS'));
                 $bccRecipients = array_merge($bccEmails, [$request->email]);
                 $send_mail = new DynamicMail($templateMessage, $emailTemplate->title);
@@ -131,34 +133,80 @@ class CustomerController extends Controller
             $status  = 'error';
             // $message = $validator->errors()->all();
         }
-        return array('error' => $error, 'message' => $message, 'status' => $status, 'customer' => $customer_data ?? '' );
+        return array('error' => $error, 'message' => $message, 'status' => $status, 'customer' => $customer_data ?? '');
     }
 
     public function doLogin(Request $request)
     {
-        
+
         $email         = $request->email;
         $password      = $request->password;
         $guest_token   = $request->guest_token;
         $checkCustomer = Customer::with(['customerAddress', 'customerAddress.subCategory'])->where('email', $email)->first();
 
-       if ($checkCustomer) {
+        if ($checkCustomer) {
             if (Hash::check($password, $checkCustomer->password)) {
-                    $error = 0;
-                    $message = 'Login Success';
-                    $status = 'success';
-                    $customer_data = $checkCustomer;
-                    $customer_address = $checkCustomer->customerAddress ?? [];
+                $error = 0;
+                $message = 'Login Success';
+                $status = 'success';
+                $customer_data = $checkCustomer;
+                $customer_address = $checkCustomer->customerAddress ?? [];
 
-                    if ($guest_token) {
+                if ($guest_token) {
 
-                        $cartData = Cart::where('guest_token', $guest_token)->get();
-                        if (isset($cartData) && count($cartData) > 0) {
-                            Cart::where('guest_token', $guest_token)->update(['guest_token' => null, 'customer_id' => $checkCustomer->id]);
+                    $cartData = Cart::where('guest_token', $guest_token)->get();
+                    if (isset($cartData) && count($cartData) > 0) {
+                        Cart::where('guest_token', $guest_token)->update(['guest_token' => null, 'customer_id' => $checkCustomer->id]);
+                    }
+                    $cartItems = Cart::where('customer_id', $checkCustomer->id)->get();
+
+
+                    if ($cartItems->count() > 0) {
+                        // Aggregate quantities for duplicate product-variation combinations
+                        $aggregatedCart = [];
+                        foreach ($cartItems as $item) {
+                            $product_id = $item->product_id;
+                            $variation_option_ids = [];
+
+                            if (isset($item->variationOptions) && !empty($item->variationOptions)) {
+                                foreach ($item->variationOptions as $variationids) {
+                                    $variation_option_ids[] = $variationids->variation_option_id;
+                                }
+                            }
+                            // Sort the variation option IDs to ensure the key is consistent regardless of the order
+                            sort($variation_option_ids);
+                            $key = $product_id . '_' . implode('_', $variation_option_ids); // Unique key for each product-variation combination
+
+                            if (isset($aggregatedCart[$key])) {
+                                $aggregatedCart[$key]['quantity'] += $item->quantity;
+                                $aggregatedCart[$key]['ids'][] = $item->id;
+                            } else {
+                                $aggregatedCart[$key] = [
+                                    'quantity' => $item->quantity,
+                                    'ids' => [$item->id],
+                                    'first_id' => $item->id,
+                                    'other_ids' => [],
+                                ];
+                            }
+                        }
+
+                        // Update quantities for the first occurrence and collect IDs for duplicates
+                        foreach ($aggregatedCart as $key => $data) {
+                            // Update the quantity of the first occurrence
+                            Cart::where('id', $data['first_id'])->update(['quantity' => $data['quantity']]);
+
+                            // Collect other IDs for deletion
+                            $data['other_ids'] = array_slice($data['ids'], 1);
+
+                            if (!empty($data['other_ids'])) {
+                                // Remove duplicates
+                                Cart::whereIn('id', $data['other_ids'])->delete();
+                            }
                         }
                     }
-                    $cart_count = Cart::where('customer_id', $checkCustomer->id)->get();
-                    $total_cart_count = count($cart_count);
+                }
+                $cart_count = Cart::where('customer_id', $checkCustomer->id)->get();
+                $total_cart_count = count($cart_count);
             } else {
                 $error = 1;
                 $message = 'Invalid credentials';
@@ -174,8 +222,7 @@ class CustomerController extends Controller
             $customer_address = [];
         }
 
-        return array('error' => $error, 'message' => $message, 'status' => $status, 'customer' => $customer_data, 'customer_addres' => $customer_address, 'cart_count' => $cart_count ?? 0 );
-
+        return array('error' => $error, 'message' => $message, 'status' => $status, 'customer' => $customer_data, 'customer_addres' => $customer_address, 'cart_count' => $cart_count ?? 0);
     }
 
     public function updateProfile(Request $request)
@@ -187,17 +234,17 @@ class CustomerController extends Controller
         $mobile_no    = $request->mobile_no;
         $customerInfo = Customer::find($customer_id);
 
-        if( $first_name ) {
+        if ($first_name) {
             $customerInfo->first_name = $first_name;
         }
-        if( $last_name ) {
+        if ($last_name) {
             $customerInfo->last_name = $last_name;
         }
-        if( $mobile_no ) {
+        if ($mobile_no) {
 
             $customerInfo->mobile_no = $mobile_no;
         }
-        if( $first_name || $last_name || $mobile_no ) {
+        if ($first_name || $last_name || $mobile_no) {
 
             $customerInfo->update();
         }
@@ -212,12 +259,12 @@ class CustomerController extends Controller
         $newPassword      = $request->password;
         $customerInfo     = Customer::find($customer_id);
 
-        if( $customerInfo ) {
+        if ($customerInfo) {
             if ($current_password == $newPassword) {
                 $error   = 1;
                 $message = 'New password cannot be same as current password';
             } else if (isset($customerInfo) && !empty($customerInfo)) {
-    
+
                 if (Hash::check($current_password, $customerInfo->password)) {
                     $error                             = 0;
                     $customerInfo->password            = Hash::make($newPassword);
@@ -233,12 +280,12 @@ class CustomerController extends Controller
             $error   = 1;
             $message = 'Customer Data not exits';
         }
-        
+
 
         return array('error' => $error, 'message' => $message);
     }
 
-    
+
 
     public function sendPasswordLink(Request $request)
     {
@@ -263,7 +310,7 @@ class CustomerController extends Controller
             // $link = 'http://192.168.0.35:2000/verify-account/' . $token_id;
             // $link = 'https://gbs-dev.vercel.app/reset-password/' . $token_id;
             // $link = 'https://beta.gbssystems.com/reset-password/' . $token_id;
-            
+
             $extract = array(
                 'name'              => $customer_info->firstName . ' ' . $customer_info->last_name,
                 'link'              => '<a href="' . $link . '"> Reset Password </a>',
@@ -281,8 +328,8 @@ class CustomerController extends Controller
 
             $send_mail = new DynamicMail($templateMessage, $emailTemplate->title);
             // return $send_mail->render();
-                $bccEmails = explode(',', env('EMAILS'));
-                $bccRecipients = array_merge($bccEmails, [$email]);
+            $bccEmails = explode(',', env('EMAILS'));
+            $bccRecipients = array_merge($bccEmails, [$email]);
             Mail::to([$email])->bcc($bccRecipients)->send($send_mail);
         } else {
             $error   = 1;
@@ -334,9 +381,8 @@ class CustomerController extends Controller
 
         $customer_id   = $request->customer_id;
         $customer_info = Customer::find($customer_id);
-        
-        return array('status' => 'success', 'message' => 'Successfully fetched customer data', 'customer' => $customer_info );
 
+        return array('status' => 'success', 'message' => 'Successfully fetched customer data', 'customer' => $customer_info);
     }
 
     public function getCustomerAddressDetails(Request $request)
@@ -350,27 +396,38 @@ class CustomerController extends Controller
         $pincode       = Pincode::where('status', 1)->orderBy('pincode')->get();
 
         $response = array(
-                        'status'       => 'success',
-                        'message'      => 'Successfully fetched address data',
-                        'addresses'    => $address_array,
-                        'address_type' => $address_type->subCategory,
-                        'country'      => $country,
-                        'state'        => $state,
-                        'pincode'      => $pincode
-                    );
-        
+            'status'       => 'success',
+            'message'      => 'Successfully fetched address data',
+            'addresses'    => $address_array,
+            'address_type' => $address_type->subCategory,
+            'country'      => $country,
+            'state'        => $state,
+            'pincode'      => $pincode
+        );
+
         return $response;
     }
 
     public function addressList($customer_id)
     {
-        $address_details = CustomerAddress::with(['countries', 'states','PostCode'])->where('customer_id', $customer_id)->orderBy('created_at', 'desc')->get();
+        $address_details = CustomerAddress::with(['countries', 'states', 'PostCode'])->where('customer_id', $customer_id)->orderBy('created_at', 'desc')->get();
+        return CustomerAddressesResource::collection($address_details);
+    }
+
+    public function getAddressListById($address_id)
+    {
+        $address_details = CustomerAddress::with(['countries', 'states', 'PostCode'])->where('id', $address_id)->orderBy('created_at', 'desc')->get();
         return CustomerAddressesResource::collection($address_details);
     }
 
     public function addUpdateCustomerAddress(Request $request)
     {
-
+        $request->validate([
+            'city' => 'required|string|max:30',
+        ], [
+            'city.max' => 'The city name must not exceed 30 characters.',
+        ]);
+        
         $ins['customer_id']     = $request->customer_id;
         $ins['address_type_id'] = $request->address_type_id;
         $ins['name']            = $request->name;
@@ -379,39 +436,40 @@ class CustomerController extends Controller
         $ins['address_line1']   = $request->address;
         $ins['countryid']       = $request->country;
         $ins['stateid']         = $request->state;
-        $pincode=Pincode::where('pincode',$request->post_code)->first();
-        if(isset($pincode)){
-        $ins['post_code']       = $pincode->id;
-        }else{
-        $pin=new Pincode();
-        $pin->pincode=$request->post_code;
-        $pin->description='new';
-        $pin->shipping_information='Standard Delivery';
-        $pin->added_by=Auth::id();
-        $pin->status=1;
-        $pin->save();
-        $ins['post_code']       = $pin->id; 
+        $pincode = Pincode::where('pincode', $request->post_code)->first();
+        if (isset($pincode)) {
+            $ins['post_code']       = $pincode->id;
+        } else {
+            $pin = new Pincode();
+            $pin->pincode = $request->post_code;
+            $pin->description = 'new';
+            $pin->shipping_information = 'Standard Delivery';
+            $pin->added_by = Auth::id();
+            $pin->status = 1;
+            $pin->save();
+            $ins['post_code']       = $pin->id;
         }
         $ins['city']            = $request->city;
 
         CustomerAddress::updateOrCreate(['id' => $request->id], $ins);
-        
-        $response = array(
-                        'error'     => 0,
-                        'message'   => $request->id ? 'Address Updated successfully' :'Address Added successfully',
-                        'status'    => 'success',
-                        'addresses' => $this->addressList($request->customer_id)
-                    );
-        return $response;
+        $changed_address = isset($request->id) ? $this->getAddressListById($request->id) : [];
 
+        $response = array(
+            'error'     => 0,
+            'message'   => $request->id ? 'Address Updated successfully' : 'Address Added successfully',
+            'status'    => 'success',
+            'addresses' => $this->addressList($request->customer_id),
+            'changed_address' => $changed_address
+        );
+        return $response;
     }
 
     public function setDefaultAddress(Request $request)
     {
-        
+
         $customer_address_id = $request->customer_address_id;
 
-        if( !$customer_address_id ) {
+        if (!$customer_address_id) {
             $error   = 1;
             $message = 'Address id is required';
         } else {
@@ -422,7 +480,6 @@ class CustomerController extends Controller
             $address = CustomerAddress::find($customer_address_id);
             $address->is_default = 1;
             $address->update();
-
         }
 
         return array('error' => $error, 'message' => $message, 'addresses' =>  $this->addressList($request->customer_id));
@@ -432,20 +489,19 @@ class CustomerController extends Controller
     {
 
         $address_id = $request->customer_address_id;
-        if( !$address_id ) {
+        if (!$address_id) {
             $error   = 1;
             $message = 'Address not found';
         } else {
             $error       = 0;
             $message     = 'Address deleted successfully';
             $addressInfo = CustomerAddress::find($address_id);
-            if($addressInfo){
-            $addressInfo->delete();
+            if ($addressInfo) {
+                $addressInfo->delete();
             }
         }
-        
-        return array('error' => $error, 'message' => $message, 'addresses' =>  $this->addressList($request->customer_id));
 
+        return array('error' => $error, 'message' => $message, 'addresses' =>  $this->addressList($request->customer_id));
     }
 
     public function setWishlists(Request $request)
@@ -459,19 +515,19 @@ class CustomerController extends Controller
 
         Wishlist::updateOrCreate(['customer_id' => $customer_id, 'product_id' => $product_id], $ins);
 
-        if($status == 1){
+        if ($status == 1) {
             $message = 'Added to Wishlist';
         } else {
             $message = 'Removed from Wishlist';
         }
-        return array( 'error' => 0, 'message' => $message );
+        return array('error' => 0, 'message' => $message);
     }
 
     public function clearWishlist(Request $request)
     {
         $customer_id = $request->customer_id;
         Wishlist::where(['customer_id' => $customer_id])->delete();
-        return array( 'error' => 0, 'message' => 'Cleared Wishlist Successfully' );
+        return array('error' => 0, 'message' => 'Cleared Wishlist Successfully');
     }
 
     public function getWishlist(Request $request)
@@ -479,9 +535,9 @@ class CustomerController extends Controller
         $customer_id = $request->customer_id;
         $wishlist    = Wishlist::where('status', 1)->where(['customer_id' => $customer_id])->get();
 
-        $wishlist_arr = []; 
-        if( isset( $wishlist ) && !empty( $wishlist ) ) {
-            foreach ($wishlist as $items ) {
+        $wishlist_arr = [];
+        if (isset($wishlist) && !empty($wishlist)) {
+            foreach ($wishlist as $items) {
                 $product_data   = Product::find($items->product_id);
                 $wishlist_arr[] = getProductApiData($product_data, $customer_id);
             }
@@ -490,4 +546,20 @@ class CustomerController extends Controller
         return $wishlist_arr;
     }
 
+    public function getCustomerData(Request $request)
+    {
+        $customer_id = $request->customer_id;
+        $user = Customer::whereId($customer_id)->first();
+        $checkCustomer = Customer::with(['customerAddress', 'customerAddress.subCategory'])->where('email', $user->email)->first();
+        if ($checkCustomer) {
+
+            $customer_address = $checkCustomer->customerAddress ?? [];
+            $cart_count = Cart::where('customer_id', $checkCustomer->id)->get();
+            $data = ['customer' => $checkCustomer, 'customer_address' => $customer_address, 'cart_count' => $cart_count];
+
+            return new Response(array('error' => 0, 'status_code' => 200, 'message' => 'Customer data loaded successfully', 'status' => 'success', 'data' => $data), 200);
+        } else {
+            return new Response(array('error' => 1, 'status_code' => 400, 'message' => 'Customer not found', 'status' => 'failure', 'data' => []), 400);
+        }
+    }
 }

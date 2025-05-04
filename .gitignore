@@ -3,7 +3,6 @@
 /public/storage
 /storage/*.key
 /vendor
-.env
 .env.backup
 .phpunit.result.cache
 docker-compose.override.yml
@@ -16,4 +15,4 @@ yarn-error.log
 today.md
 storage/
 .env
-.env
+*.env

@@ -259,6 +259,7 @@ class ProductController extends Controller
             'product_name' => 'required_if:product_page_type,==,general',
             'base_price' => 'required_if:product_page_type,==,general',
             'mrp' => 'required_if:product_page_type,==,general',
+            'qty' => 'required',
             // 'strike_price' => 'required_if:product_page_type,==,general',
             'sku' => 'required_if:product_page_type,==,general|unique:products,sku,' . $id . ',id,deleted_at,NULL',
             'sale_price' => 'required_if:discount_option,==,percentage',
@@ -475,21 +476,66 @@ class ProductController extends Controller
             }
 
             if (isset($request->kt_docs_repeater_nested_outer) && !empty($request->kt_docs_repeater_nested_outer)) {
-                ProductVariationOption::where('product_id', $product_id)->delete();
                 $kt_docs_repeater_nested_outer = $request->kt_docs_repeater_nested_outer;
-           
-                $product_option_ins['product_id']                  = $product_id;
-                for ($i = 0; $i < count($kt_docs_repeater_nested_outer); $i++) {
-                    $product_option_ins['variation_id'] = $kt_docs_repeater_nested_outer[$i]['variation_id'];
-                    $kt_docs_repeater_nested_inner = $kt_docs_repeater_nested_outer[$i]['kt_docs_repeater_nested_inner'];
-                    for ($j = 0; $j < count($kt_docs_repeater_nested_inner); $j++) {
-                        $product_option_ins['value'] = $kt_docs_repeater_nested_inner[$j]['variation_value'];
-                        $product_option_ins['amount'] = $kt_docs_repeater_nested_inner[$j]['amount'];
-                        $product_option_ins['is_default'] = $kt_docs_repeater_nested_inner[$j]['is_default'][0] ?? 0;
-                        ProductVariationOption::create($product_option_ins);
+                $product_id = $request->id;
+            
+                // Fetch all existing options for the product and variation IDs
+                $existingOptions = ProductVariationOption::where('product_id', $product_id)
+                    ->get();
+            
+                // Initialize a collection to track found options
+                $optionsFound = collect();
+            
+                foreach ($kt_docs_repeater_nested_outer as $outer) {
+                    if (!empty($outer['variation_id'])) {
+                        $variation_id = $outer['variation_id'];
+                        $kt_docs_repeater_nested_inner = $outer['kt_docs_repeater_nested_inner'];
+            
+                        foreach ($kt_docs_repeater_nested_inner as $inner) {
+                            $value = $inner['variation_value'];
+                            $amount = $inner['amount'];
+                            $discount_amount = $inner['discount_amount'];
+                            $is_default = $inner['is_default'][0] ?? 0;
+            
+                            $existingOption = $existingOptions
+                                ->where('variation_id', $variation_id)
+                                ->where('value', $value)
+                                ->first();
+            
+                            if ($existingOption) {
+                                // Update existing record
+                                $existingOption->amount = $amount;
+                                $existingOption->discount_amount = $discount_amount;
+                                $existingOption->is_default = $is_default;
+                                $existingOption->save();
+            
+                                // Add to found options collection
+                                $optionsFound->push($existingOption);
+                            } else {
+                                // Insert new record
+                                ProductVariationOption::create([
+                                    'product_id' => $product_id,
+                                    'variation_id' => $variation_id,
+                                    'value' => $value,
+                                    'amount' => $amount,
+                                    'discount_amount' => $discount_amount,
+                                    'is_default' => $is_default
+                                ]);
+                            }
+                        }
                     }
                 }
+            
+                // Delete options that were not found in the current request
+                $existingOptions->diff($optionsFound)->each(function ($option) {
+                    $option->delete();
+                });
+            
+            } else {
+                // If $request->kt_docs_repeater_nested_outer is empty or not set, delete all options for the product
+                ProductVariationOption::where('product_id', $product_id)->delete();
             }
+            
 
             $meta_ins['meta_title']         = $request->meta_title ?? '';
             $meta_ins['meta_description']   = $request->meta_description ?? '';

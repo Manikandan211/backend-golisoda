@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Exports\OrderExport;
 use App\Mail\DynamicMail;
 use App\Mail\OrderMail;
+use App\Models\BrandOrder;
 use App\Models\GlobalSettings;
+use App\Models\Master\Brands;
+use App\Models\Master\BrandVendorLocation;
 use App\Models\Master\EmailTemplate;
 use App\Models\Master\OrderStatus;
 use App\Models\Order;
@@ -14,37 +17,50 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use DataTables;
 use Exception;
+use App\Models\Master\Variation;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Maatwebsite\Excel\Facades\Excel;
 use Mail;
 use Image;
+use PDF;
 use App\Models\Master\Pincode;
+use App\Services\WatiService;
+use Illuminate\Support\Facades\Log;
+
 class OrderController extends Controller
 {
+    protected $watiService;
+
+    public function __construct(WatiService $watiService)
+    {
+        $this->watiService = $watiService;
+    }
+
+
     public function index(Request $request)
     {
         if ($request->ajax()) {
-            $order_by=$request->order[0]['column']?? 'orders.id';
-            $order_type=$request->order[0]['dir'] ?? 'desc';
-            if(isset($request->order[0]['column'])){
-            if($request->order[0]['column'] ==0){
-                $order_by='orders.created_at';
-            }else if($request->order[0]['column'] ==1){
-                $order_by='orders.order_no';
-            }else if($request->order[0]['column'] ==2){
-                $order_by='orders.billing_address_line1';
-            }else if($request->order[0]['column'] ==3){
-                $order_by='orders.amount';
-            }else if($request->order[0]['column'] ==4){
-                $order_by='order_quantity';
-            }else if($request->order[0]['column'] ==5){
-                $order_by='payment_type';
-            }else if($request->order[0]['column'] ==6){
-                $order_by='payment_status';
-            }else{
-                $order_by='orders.id';
-            }
+            $order_by = $request->order[0]['column'] ?? 'orders.id';
+            $order_type = $request->order[0]['dir'] ?? 'desc';
+            if (isset($request->order[0]['column'])) {
+                if ($request->order[0]['column'] == 0) {
+                    $order_by = 'orders.created_at';
+                } else if ($request->order[0]['column'] == 1) {
+                    $order_by = 'orders.order_no';
+                } else if ($request->order[0]['column'] == 2) {
+                    $order_by = 'orders.billing_address_line1';
+                } else if ($request->order[0]['column'] == 3) {
+                    $order_by = 'orders.amount';
+                } else if ($request->order[0]['column'] == 4) {
+                    $order_by = 'order_quantity';
+                } else if ($request->order[0]['column'] == 5) {
+                    $order_by = 'payment_type';
+                } else if ($request->order[0]['column'] == 6) {
+                    $order_by = 'payment_status';
+                } else {
+                    $order_by = 'orders.id';
+                }
             }
             $data = Order::selectRaw('gbs_payments.order_id,gbs_payments.payment_no,gbs_payments.status as payment_status,gbs_payments.payment_type,gbs_orders.status as order_status,gbs_orders.billing_address_line1 as billing_info,gbs_orders.*,sum(gbs_order_products.quantity) as order_quantity')
                 ->join('order_products', 'order_products.order_id', '=', 'orders.id')
@@ -72,23 +88,23 @@ class OrderController extends Controller
                 })
                 ->addIndexColumn()
                 ->editColumn('billing_info', function ($row) {
-                    $pincode=Pincode::find($row['billing_post_code']);
+                    $pincode = Pincode::find($row['billing_post_code']);
                     $billing_info = '';
                     $billing_info .= '<div class="font-weight-bold">' . $row['billing_name'] . '</div>';
                     $billing_info .= '<div class="">' . $row['billing_email'] . ',' . $row['billing_mobile_no'] . '</div>';
                     $billing_info .= '<div class="">' . $row['billing_address_line1'] . '</div>';
-                    $billing_info .= '<div class="">' . $row['billing_city'] . ','  . $row['billing_state'] . ','  . $row['billing_country'] . '-'  . $pincode->pincode?? '' .  '</div>';
+                    $billing_info .= '<div class="">' . $row['billing_city'] . ','  . $row['billing_state'] . ','  . $row['billing_country'] . '-'  . $pincode ? $pincode->pincode ?? '' : '' .  '</div>';
 
                     return $billing_info;
                 })
 
                 ->editColumn('payment_status', function ($row) {
                     return ucwords($row->payment_status);
-                })  ->editColumn('payment_type', function ($row) {
+                })->editColumn('payment_type', function ($row) {
                     return strtoupper($row->payment_type ?? '');
                 })
                 ->editColumn('order_status', function ($row) {
-                    return ucwords($row->status);
+                    return ucwords(str_replace('_', ' ', $row->status));
                 })
                 ->editColumn('created_at', function ($row) {
                     $created_at = Carbon::createFromFormat('Y-m-d H:i:s', $row['created_at'])->format('d-m-Y');
@@ -123,7 +139,6 @@ class OrderController extends Controller
         $order_id = $request->id;
         $order_info = Order::find($order_id);
         $pickup_details = [];
-        
         $modal_title        = 'View Order';
         $globalInfo = GlobalSettings::first();
         $view_order = view('platform.invoice.view_invoice', compact('order_info', 'globalInfo', 'pickup_details'));
@@ -138,9 +153,22 @@ class OrderController extends Controller
         $modal_title        = 'Update Order Status';
 
         $info = Order::find($order_id);
+
+        $brandOrders = BrandOrder::select('brand_id', 'tracking_id', 'estimated_arrival_date')
+            ->where('order_id', $order_id)
+            ->groupBy('brand_id') // Ensure unique brand_ids
+            ->get();
+
+        // Get brand names for each brand_id
+        foreach ($brandOrders as $brandOrder) {
+            $brand = Brands::find($brandOrder->brand_id);
+            if (isset($brand))
+                $brandOrder->brand_name = $brand->brand_name;
+        }
+
         $order_status_info = OrderStatus::where('status', 'published')->get();
 
-        return view('platform.order.order_status_modal', compact('info', 'order_status_info'));
+        return view('platform.order.order_status_modal', compact('info', 'order_status_info', 'brandOrders'));
     }
 
     public function changeOrderStatus(Request $request)
@@ -151,12 +179,32 @@ class OrderController extends Controller
             'description' => 'required|string',
         ]);
         if ($validator->passes()) {
-           if($request->order_status_id==6){
-               return response()->json(['error' => 1, 'message' => 'Admin cannot raise a cancel request as this will be raised by the website customers.']); 
-           }
+
+
+            $trackingIds = $request->input('tracking_id');
+            $arrivalDates = $request->input('estimated_arrival_date');
+            if (isset($trackingIds) || isset($arrivalDates)) {
+
+                foreach ($trackingIds as $brandId => $trackingId) {
+                    $brandOrders = BrandOrder::where([['order_id', $id], ['brand_id', $brandId]])->get();
+                    if (isset($brandOrders) && !empty($brandOrders)) {
+                        foreach ($brandOrders as $brandOrder) {
+                            $brandOrder->tracking_id = $trackingId;
+                            $brandOrder->estimated_arrival_date = $arrivalDates[$brandId];
+                            $brandOrder->save();
+                        }
+                    }
+                }
+            }
+
+
+            if ($request->order_status_id == 6) {
+                return response()->json(['error' => 1, 'message' => 'Admin cannot raise a cancel request as this will be raised by the website customers.']);
+            }
             $info = Order::find($id);
             $info->notification_status = 'yes';
             $info->order_status_id = $request->order_status_id;
+            $info->description = $request->description;
 
             switch ($request->order_status_id) {
                 case '1':
@@ -200,7 +248,7 @@ class OrderController extends Controller
                         'company_address' => $globalInfo->address,
                         'customer_login_url' => env('WEBSITE_LOGIN_URL'),
                         'order_no' => $info->order_no,
-                        'description'=>$request->description??''
+                        'description' => $request->description ?? ''
                     );
                     $templateMessage = $emailTemplate->message;
                     $templateMessage = str_replace("{", "", addslashes($templateMessage));
@@ -215,8 +263,8 @@ class OrderController extends Controller
 
                     $send_mail = new DynamicMail($templateMessage, $title);
                     // return $send_mail->render();
-                     $bccEmails = explode(',', env('BCC_EMAILS'));
-                     $bccRecipients = array_merge($bccEmails, [$info->billing_email]);
+                    $bccEmails = explode(',', env('BCC_EMAILS'));
+                    $bccRecipients = array_merge($bccEmails, [$info->billing_email]);
                     Mail::to($info->billing_email)->bcc($bccRecipients)->send($send_mail);
 
                     #send sms for notification
@@ -231,6 +279,25 @@ class OrderController extends Controller
 
                     $info->status = 'shipped';
                     $info->delivery_otp = $otp;
+                    log::info(config('wati.order_shipped'));
+
+                    if (!empty(config('wati.order_shipped'))) {
+                        $brandOrders = BrandOrder::select('brand_id', 'tracking_id', 'estimated_arrival_date')
+                            ->where('order_id', $id)
+                            ->groupBy('brand_id') // Ensure unique brand_ids
+                            ->get();
+                        if (isset($brandOrders) && !empty($brandOrders)) {
+                            foreach ($brandOrders as $brandOrder) {
+                                $whatsapp_params = [
+                                    ['name' => 'name', 'value' => $info->billing_name],
+                                    ['name' => 'order_number', 'value' => $info->order_no],
+                                    ['name' => 'tracking_url', 'value' => $brandOrder->tracking_id?? 'Track data not available'],
+                                ];
+                                $mobile_number = formatPhoneNumber($info->billing_mobile_no);
+                                $this->watiService->sendMessage($mobile_number, config('wati.order_shipped'), config('wati.order_shipped'),  $whatsapp_params);
+                            }
+                        }
+                    }
 
                     break;
 
@@ -283,7 +350,7 @@ class OrderController extends Controller
                         'dynamic_content' => '',
                         'customer_login_url' => env('WEBSITE_LOGIN_URL'),
                         'order_id' => $info->order_no,
-                        'description'=>$request->description??''
+                        'description' => $request->description ?? ''
                     );
                     $templateMessage = $emailTemplate->message;
                     $templateMessage = str_replace("{", "", addslashes($templateMessage));
@@ -297,13 +364,19 @@ class OrderController extends Controller
                     eval("\$title = \"$title\";");
 
                     // $filePath = 'storage/orderDocument/' . $info->order_no . '/document/' . $imagName;
-                    
-                    $filePath = "";
+
+                    // $filePath = "";
                     // $send_mail = new OrderMail($templateMessage, $title, $filePath);
-                     $send_mail = new OrderMail($templateMessage, $title);
+                    //  $send_mail = new OrderMail($templateMessage, $title);
+                    $filePath = 'storage/invoice_order/' . $info->order_no . '.pdf';
+                    if (!(file_exists(public_path($filePath)))) {
+                        $this->generateInvoice($order_id);
+                    }
+                    $send_mail = new OrderMail($templateMessage, $title, $filePath);
+
                     // return $send_mail->render();
-                     $bccEmails = explode(',', env('BCC_EMAILS'));
-                     $bccRecipients = array_merge($bccEmails, [$info->billing_email]);
+                    $bccEmails = explode(',', env('BCC_EMAILS'));
+                    $bccRecipients = array_merge($bccEmails, [$info->billing_email]);
                     Mail::to($info->billing_email)->bcc($bccRecipients)->send($send_mail);
 
                     #send sms for notification
@@ -314,11 +387,29 @@ class OrderController extends Controller
                         'mobile_no' => [$info->billing_mobile_no]
                     );
                     // sendGBSSms('delivery_sms', $sms_params);
+                    
+                    if (!empty(config('wati.order_delivered'))) {
+                        $whatsapp_params = [
+                            ['name' => 'name', 'value' => $info->billing_name],
+                            ['name' => 'order_number', 'value' => $info->order_no],
+                        ];
+                        $mobile_number = formatPhoneNumber($info->billing_mobile_no);
+                        $this->watiService->sendMessage($mobile_number, config('wati.order_delivered'), config('wati.order_delivered'),  $whatsapp_params);
+                    }
+
+
 
                     break;
 
                 default:
                     # code...
+                    $orderStatus = OrderStatus::find($request->order_status_id);
+                    if (isset($orderStatus)) {
+                        $action = $orderStatus->status_name;
+                        $info->status = strtolower(str_replace(' ', '_', $action));
+                    } else {
+                        $action = '';
+                    }
                     break;
             }
 
@@ -351,5 +442,59 @@ class OrderController extends Controller
             ->groupBy('orders.id')->get();
         $order_count = count($data);
         return $order_count;
+    }
+
+    public function generateInvoice($order_id)
+    {
+        $order_info = Order::find($order_id);
+        if ($order_info) {
+            $globalInfo = GlobalSettings::first();
+
+            $pdf = PDF::loadView('platform.invoice.index', compact('order_info', 'globalInfo'));
+            Storage::put('public/invoice_order/' . $order_info->order_no . '.pdf', $pdf->output());
+            return true;
+        }
+        return false;
+    }
+
+    public function downloadVendorInvoice(Request $request)
+    {
+        $order_id = $request->order_id;
+        $singleBrandId = $request->brand_id;
+        $order_no = $request->order_no;
+        $globalInfo = GlobalSettings::first();
+
+        $order_info = Order::find($order_id);
+        $variations = $this->getVariations($order_info);
+        $brand_address = BrandVendorLocation::where([['brand_id', $singleBrandId], ['is_default', 1]])
+            ->join('brands', 'brand_vendor_locations.brand_id', '=', 'brands.id')
+            ->select('brand_vendor_locations.*', 'brands.brand_name')
+            ->first();
+        if (isset($brand_address) && (!empty($brand_address))) {
+            $pdf = PDF::loadView('platform.vendor_invoice.index', compact('brand_address', 'order_info', 'globalInfo', 'variations', 'singleBrandId'));
+            Storage::put('public/invoice_order/' . $order_id . '/' . $singleBrandId . '/' . $order_no . '.pdf', $pdf->output());
+            return $pdf->download($order_no . '.pdf');
+        }
+    }
+
+    /**
+     * Method getVariations
+     *
+     * @param $order_info object
+     *
+     * @return array
+     */
+    public function getVariations($order_info)
+    {
+        $variation_id = [];
+        $variations = [];
+        if (isset($order_info->Variation) && !empty($order_info->Variation)) {
+            $data = $order_info->Variation;
+            foreach ($data as $value) {
+                $variation_id[] = $value->variation_id;
+            }
+            $variations = Variation::whereIn('id', $variation_id)->get();
+        }
+        return $variations;
     }
 }

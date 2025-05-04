@@ -94,6 +94,7 @@ Route::middleware(['auth'])->group(function(){
         'homepage-setting-field'    => App\Http\Controllers\HomePageSetting\HomepageSettingFieldController::class,
         'homepage-setting'    => App\Http\Controllers\HomePageSetting\HomepageSettingController::class,
         'warranty'    => App\Http\Controllers\WarrantyController::class,
+        'manifest-generation' => App\Http\Controllers\Master\ManifestGenerationController::class,
     );
    
     foreach ($routeArray as $key => $value) {
@@ -202,18 +203,26 @@ Route::middleware(['auth'])->group(function(){
         Route::get('order-count', [App\Http\Controllers\OrderController::class, 'orderCountGolbal'])->name('order-count');
         Route::post('/change/order/status', [App\Http\Controllers\OrderController::class, 'changeOrderStatus'])->name('order.change.status');
         Route::post('/export/excel', [App\Http\Controllers\OrderController::class, 'export'])->name('order.export.excel')->middleware(['checkAccess:export']);
+        Route::get('/vendor/download', [App\Http\Controllers\OrderController::class, 'downloadVendorInvoice'])->name('order.vendor.invoice.download');
+
     });
 
     Route::prefix('reports')->middleware(['checkAccess:visible'])->group(function(){
         Route::get('/sale', [App\Http\Controllers\ReportProductController::class, 'index'])->name('reports.sale');
-        Route::post('/excel/export', [App\Http\Controllers\ReportProductController::class, 'exportExcel'])->name('reports.export.excel');
+        Route::post('/excel/export/sale', [App\Http\Controllers\ReportProductController::class, 'exportExcel'])->name('reports.export.excel.sale');
         Route::get('/productwisesale', [App\Http\Controllers\ProductwiseSaleReportController::class, 'index'])->name('reports.productwise');
-        Route::post('/excel/export', [App\Http\Controllers\ProductwiseSaleReportController::class, 'exportExcel'])->name('reports.export.excel');
+        Route::post('/excel/export/product', [App\Http\Controllers\ProductwiseSaleReportController::class, 'exportExcel'])->name('reports.export.excel');
         Route::get('/customerwisesale', [App\Http\Controllers\CustomerwiseSaleReportController::class, 'index'])->name('reports.customerwise');
-        Route::post('/excel/export', [App\Http\Controllers\CustomerwiseSaleReportController::class, 'exportExcel'])->name('reports.export.excel');
+        Route::post('/excel/export/customer', [App\Http\Controllers\CustomerwiseSaleReportController::class, 'exportExcel'])->name('reports.export.excel.customer');
         Route::get('payment-report', [App\Http\Controllers\PaymentReportController::class, 'index'])->name('reports.payment');
-        Route::post('/payment-view', [App\Http\Controllers\PaymentReportController::class, 'paymentView'])->name('payment-reports.view');
-        Route::post('/export/excel', [App\Http\Controllers\PaymentReportController::class, 'export'])->name('payment-reports.export.excel');
+        Route::post('/payment-view', [App\Http\Controllers\PaymentReportController::class, 'paymentView'])->name('reports.payment.view');
+        Route::post('/export/excel', [App\Http\Controllers\PaymentReportController::class, 'export'])->name('reports.payment.export.excel');
+        Route::get('/vendor-wise-sale', [App\Http\Controllers\VendorWiseSaleReportController::class, 'index'])->name('reports.vendor.wise');
+        Route::post('/vendor-wise-sale/view', [App\Http\Controllers\VendorWiseSaleReportController::class, 'viewInvoice'])->name('reports.vendor_wise_sale.view');
+        Route::get('/vendor-wise-sale/download', [App\Http\Controllers\VendorWiseSaleReportController::class, 'downloadInvoice'])->name('reports.vendor_wise_sale.download');
+        Route::post('/vendor-wise-sale/send-invoice', [App\Http\Controllers\VendorWiseSaleReportController::class, 'sendInvoice'])->name('reports.vendor_wise_sale.send');
+
+
     });
     
     Route::prefix('payment')->group(function(){

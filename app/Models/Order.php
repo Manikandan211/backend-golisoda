@@ -63,7 +63,9 @@ class Order extends Model
         'delivery_document',
         'response_amount',
         'is_cod',
-        'cod_amount'
+        'cod_amount',
+        'rocket_charge_name',
+        'rocket_charge_response',
     ];
 
     public function orderItems()
@@ -97,5 +99,12 @@ class Order extends Model
     {
         return $this->hasOne(Pincode::class, 'id', 'shipping_post_code');
     }
+    public function Variation(){
+        return $this->hasMany(OrderProductVariationOption::class, 'order_id', 'id');
+    }
 
+    public function brandOrders()
+    {
+        return $this->hasMany(BrandOrder::class);
+    }
 }

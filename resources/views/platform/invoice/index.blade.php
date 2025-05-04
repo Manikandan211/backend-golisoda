@@ -86,14 +86,14 @@
                 <table class="no-border" style="width: 100%">
                     <tr>
                         <td class="w-30"> <span>
-                              <img src="{{ asset('assets/global_setting/logo/1707472536_logo.png') }}" alt=""
+                                <img src="{{ public_path('assets/global_setting/logo/1707472536_logo.png') }}" alt=""
                                     height="75"></span> </td>
                         <td class="w-70">
                             <h2> {{ $globalInfo->site_name }} </h2>
                             <div> {{ $globalInfo->address }} </div>
                             <!--<div> {{ $globalInfo->site_email }} </div>-->
                             <!--<div> {{ $globalInfo->site_mobile_no }} </div>-->
-                           
+
                         </td>
 
                     </tr>
@@ -113,7 +113,8 @@
                             <div><b>{{ $order_info->billing_name }}</b></div>
                             <div>{{ $order_info->billing_address_line1 }}</div>
                             <div>{{ $order_info->billing_city }}</div>
-                            <div>{{ $order_info->billing_state }} - {{ $order_info->billing_pincode->pincode?? '' }}</div>
+                            <div>{{ $order_info->billing_state }} - {{ $order_info->billing_pincode->pincode ?? '' }}
+                            </div>
                             <div>{{ $order_info->billing_mobile_no }}</div>
                             <div>{{ $order_info->billing_email }}</div>
                         </td>
@@ -131,7 +132,8 @@
                                 <div><b>{{ $order_info->shipping_name }}</b></div>
                                 <div>{{ $order_info->shipping_address_line1 }}</div>
                                 <div>{{ $order_info->shipping_city }}</div>
-                                <div>{{ $order_info->shipping_state }} - {{ $order_info->shipping_pincode->pincode?? '' }}</div>
+                                <div>{{ $order_info->shipping_state }} -
+                                    {{ $order_info->shipping_pincode->pincode ?? '' }}</div>
                                 <div>{{ $order_info->shipping_mobile_no }}</div>
                                 <div>{{ $order_info->shipping_email }}</div>
                             </td>
@@ -163,7 +165,8 @@
                                 </tr>
                                 <tr>
                                     <td class="w-50"> Payment Type </td>
-                                    <td class="w-50" style=" text-transform: uppercase;"> {{ $order_info->payments->payment_type ?? '' }} </td>
+                                    <td class="w-50" style=" text-transform: uppercase;">
+                                        {{ $order_info->payments->payment_type ?? '' }} </td>
                                 </tr>
                             </table>
                         </td>
@@ -180,8 +183,8 @@
             <th rowspan="2"> ITEM DESCRIPTION </th>
             <th rowspan="2" style="width: 40px;"> HSN</th>
             <th rowspan="2" style="width: 30px;"> QTY</th>
-            <th rowspan="2" style="width: 30px;"> RATE </th>
-            <th rowspan="2" style="width: 40px;"> TAXABLE VALUE </th>
+            <th rowspan="2" style="width: 30px;"> MRP </th>
+            {{-- <th rowspan="2" style="width: 40px;"> TAXABLE VALUE </th> --}}
             <th colspan="2" style="width: 100px;"> CGST </th>
             <th colspan="2" style="width: 100px;"> SGST </th>
             <th rowspan="2" style="width: 40px;"> NET Amount </th>
@@ -194,9 +197,24 @@
         </tr>
         @if (isset($order_info->orderItems) && !empty($order_info->orderItems))
             @php
+                $save_price = 0;
                 $i = 1;
             @endphp
             @foreach ($order_info->orderItems as $item)
+                @php
+                    $id = $item->id;
+                    $OrderProductVariationOption = App\Models\OrderProductVariationOption::where(
+                        'order_product_id',
+                        $id,
+                    )->get();
+                    $variation_id = [];
+                    $variation_value = [];
+                    foreach ($OrderProductVariationOption as $value) {
+                        $variation_id[] = $value->variation_id;
+                        $variation_value[] = $value->value;
+                    }
+                    $variations = App\Models\Master\Variation::whereIn('id', $variation_id)->get();
+                @endphp
                 <tr>
                     <td>{{ $i }}</td>
                     <td>
@@ -204,8 +222,16 @@
                     </td>
                     <td>
                         <div>
-
-                            {{ $item->product_name }}
+                            {{ $item->product_name }}<br>
+                            @php
+                                $data = $variation_value;
+                            @endphp
+                            @foreach ($variations as $key => $value)
+                                {{-- @php
+                             
+                         @endphp --}}
+                                {{ $value->title }} : {{ $data[$key] }}<br>
+                            @endforeach
                         </div>
                         <div>
                             {{-- Warranty-15-02-2024 --}}
@@ -216,13 +242,30 @@
                     </td>
                     <td> {{ $item->hsn_code ?? '85044030' }} </td>
                     <td> {{ $item->quantity }} nos</td>
-                    <td> {{ number_format($item->price, 2) }} </td>
-                    <td>{{ number_format($item->price, 2) }}</td>
+                    <?php
+                    if (!($order_info->coupon_amount > 0 && isset($item->coupon_id))) {
+                        $save_price = number_format($save_price + $item->save_price * $item->quantity, 2);
+                    }
+                    ?>
+                    {{-- @if ($order_info->coupon_amount > 0 && isset($item->coupon_id)) --}}
+                    <td>{{ number_format($item->strice_price, 2) }}</td>
+                    {{-- @else
+                        <td>{{ number_format($item->price, 2) }}</td>
+                    @endif --}}
+
+                    {{-- <td> {{ number_format($item->price, 2) }} </td>
+                    <td>{{ number_format($item->price, 2) }}</td> --}}
                     <td>{{ $item->tax_percentage / 2 }}%</td>
                     <td>{{ number_format($item->tax_amount / 2, 2) }}</td>
                     <td>{{ $item->tax_percentage / 2 }}%</td>
                     <td>{{ number_format($item->tax_amount / 2, 2) }}</td>
-                    <td>{{ number_format($item->sub_total, 2) }}</td>
+                    {{-- <td>{{ number_format($item->sub_total, 2) }}</td> --}}
+                    {{-- @if ($order_info->coupon_amount > 0 && isset($item->coupon_id)) --}}
+                        <td>{{ number_format($item->strice_price * $item->quantity, 2) }}</td>
+                    {{-- @else
+                        <td>{{ number_format($item->price * $item->quantity, 2) }}</td>
+                    @endif --}}
+
                 </tr>
                 @php
                     $i++;
@@ -234,7 +277,7 @@
                 <tr>
                     <td>{{ $i }}</td>
                     <td>
-                       {{ $item->addon->title ?? '' }}
+                        {{ $item->addon->title ?? '' }}
                     </td>
                     <td>
                         <div>
@@ -269,7 +312,7 @@
                 </div>
                 <div>
 
-                 
+
                 </div>
             </td>
             <td colspan="5" style="text-align:right;width:100%;">
@@ -281,12 +324,12 @@
                         </td>
                         <td class="w-100" style="text-align: right;">
                             <span style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>
-                            {{ number_format($order_info->sub_total, 2) }}
+                            {{ number_format(($order_info->sub_total + (float)$save_price), 2) }}
                         </td>
                     </tr>
                     <tr>
                         <!--(%{{ (int) $order_info->tax_percentage }})-->
-                        <td style="text-align: right;">Tax  </td>
+                        <td style="text-align: right;">Tax </td>
                         <td class="w-100" style="text-align: right;;float:right">
                             <span
                                 style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>{{ number_format($order_info->tax_amount, 2) }}
@@ -294,36 +337,63 @@
                     </tr>
                     @if ($order_info->coupon_amount > 0 && isset($order_info->coupon_code))
                         <tr>
-                            <td style="text-align: right;">
+                            <td class="w-70" style="text-align: right;">
                                 <div>Coupon Amount </div>
-                                @if( $order_info->coupon_type=="percentage")
-                                 <small> ( {{$order_info->coupon_code}} - {{ round($order_info->coupon_percentage) }} % )</small>
-                               @else
-                               <small>( {{ $order_info->coupon_code }})</small>
-                               @endif
+                                @if ($order_info->coupon_type == 'percentage')
+                                    <small> ( {{ $order_info->coupon_code }} -
+                                        {{ round($order_info->coupon_percentage) }} % )</small>
+                                @else
+                                    <small>( {{ $order_info->coupon_code }})</small>
+                                @endif
                             </td>
-                            <td class="w-100" style="text-align: right;"> - <span
-                                    style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>  {{ number_format($order_info->coupon_amount, 2) }}
+
+                            <td class="w-30" style="text-align: right;"> - <span
+                                    style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>
+                                {{ number_format(($order_info->coupon_amount), 2) }}
                             </td>
                         </tr>
                     @endif
+                    @if ($save_price > 0)
+                    <tr>
+                        <td class="w-70" style="text-align: right;">
+                            <div>Discount Amount </div>
+                            
+                        </td>
 
-                    @if ($order_info->shipping_amount > 0)
+                        <td class="w-30" style="text-align: right;"> - <span
+                                style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>
+                            {{ $save_price }}
+                        </td>
+                    </tr>
+                    @endif
+                    @if ($order_info->shipping_amount > 1)
                         <tr>
                             <td style="text-align: right;">
                                 <div>Shipping Fee </div>
-                                <small>( {{ $order_info->shipping_type }})</small>
+                                <small>( {{ ucwords(str_replace('_', ' ', $order_info->shipping_type)) }})</small>
                             </td>
                             <td class="w-100" style="text-align: right;"><span
-                                    style="font-family: DejaVu Sans; sans-serif;">&#8377;</span> - {{ number_format($order_info->shipping_amount, 2) }}
+                                    style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>
+                                {{ number_format($order_info->shipping_amount, 2) }}
+                            </td>
+                        </tr>
+                    @else
+                        <tr>
+                            <td style="text-align: right;">
+                                <div>Shipping Fee </div>
+                                <small>Free Shipping</small>
+                            </td>
+                            <td class="w-100" style="text-align: right;"><span
+                                    style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>
+                                0.00
                             </td>
                         </tr>
                     @endif
-                     @if ($order_info->is_cod==1)
+                    @if ($order_info->is_cod == 1)
                         <tr>
                             <td style="text-align: right;">
                                 <div>COD </div>
-                               
+
                             </td>
                             <td class="w-100" style="text-align: right;"><span
                                     style="font-family: DejaVu Sans; sans-serif;">&#8377;</span>{{ number_format($order_info->cod_amount, 2) }}

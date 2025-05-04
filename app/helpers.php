@@ -287,51 +287,70 @@ function getProductApiData($product_data, $customer_id = '', $variation_option_i
     //    dd( $product_data->productCategory->name );
 
     $category               = $product_data->productCategory;
-    $price_data = getProductPrices($product_data);
 
     $pro                    = [];
     $total_variation_amount = 0;
+    $total_discount_amount = 0;
+    $default_value = [];
+
     if (isset($variation_option_id) && !empty($variation_option_id)) {
         $variation_option_data = ProductVariationOption::whereIn('id', $variation_option_id)
             ->where('product_id', $product_data->id)
-            ->selectRaw("SUM(amount) AS total_amount")
-            ->groupBy('product_id')
             ->get();
-        if(isset($variation_option_data)){
-        $total_variation_amount = $variation_option_data[0]->total_amount;
 
-        }
-
-    }else{
-        $variation_option_data = ProductVariationOption::where('product_id', $product_data->id)
-        ->where('is_default', 1)
-        ->get();   
-    if(isset($variation_option_data)){
-       
-        $default_value = [];
         foreach ($variation_option_data as $value) {
-          
+
             $variation = Variation::where('id', $value->variation_id)->first();
-            if($variation){
+            if ($variation) {
                 $title = $variation->title ?? '';
-                $id = $value->id ?? '';           
+                $id = $value->id ?? '';
                 $default_value[$title] = $id;
-            }   
+                $amount = $value->amount;
+                $discount_amount = $value->discount_amount;
+                $total_variation_amount = $total_variation_amount + $amount;
+                $total_discount_amount = $total_discount_amount + $discount_amount;
+            }
         }
-    } 
+    } else {
+        $variation_option_data = ProductVariationOption::where('product_id', $product_data->id)
+            ->where('is_default', 1)
+            ->get();
+
+        if (isset($variation_option_data)) {
+
+            foreach ($variation_option_data as $value) {
+
+                $variation = Variation::where('id', $value->variation_id)->first();
+                if ($variation) {
+                    $title = $variation->title ?? '';
+                    $id = $value->id ?? '';
+                    $default_value[$title] = $id;
+                    $amount = $value->amount;
+                    $discount_amount = $value->discount_amount;
+                    $total_variation_amount = $total_variation_amount + $amount;
+                    $total_discount_amount = $total_discount_amount + $discount_amount;
+                }
+            }
+        }
     }
-    $pro['default_value ']= $default_value;
+    if (isset($default_value) && !empty($default_value)) {
+        $product_data->mrp = ($product_data->strike_price + $total_variation_amount) - $total_discount_amount;
+        $product_data->strike_price = $product_data->strike_price + $total_variation_amount;
+        $product_data->discount_percentage = ($total_discount_amount > 0) ? $product_data->discount_percentage : 0;
+    }
+    $price_data = getProductPrices($product_data);
+    $pro['default_value'] = (object)$default_value;
     $pro['total_variation_amount'] = $total_variation_amount;
     if ($price_data['overall_discount_percentage'] != 0) {
-        $pro['price']           = $price_data['price'] + $total_variation_amount;
+        $pro['price']           = number_format($price_data['price'], 2);
         $pro['discount_percentage'] = $price_data['overall_discount_percentage'];
-        $pro['strike_price']    = $price_data['strike_rate'];
-        $pro['save_price']      = round($price_data['strike_rate'] - $price_data['price']);
+        $pro['strike_price']    = number_format($price_data['strike_rate'], 2);
+        $pro['save_price']      = round($price_data['strike_rate'] - $pro['price']);
     } else {
-        $pro['price']           = $product_data->mrp + $total_variation_amount;
+        $pro['price']           = number_format($product_data->mrp, 2);
         $pro['discount_percentage'] = $product_data->discount_percentage != 0 ? abs($product_data->discount_percentage) : getDiscountPercentage($product_data->mrp, $product_data->strike_price);
-        $pro['strike_price']    = $product_data->strike_price;
-        $pro['save_price']      = round($product_data->strike_price - $product_data->mrp);
+        $pro['strike_price']    = number_format($product_data->strike_price, 2);
+        $pro['save_price']      = round(($product_data->strike_price) - ($product_data->mrp));
     }
     $pro['id']              = $product_data->id;
     $pro['product_name']    = $product_data->product_name;
@@ -894,9 +913,8 @@ if (!function_exists('getProductPrice')) {
 if (!function_exists('getProductPrices')) {
     function getProductPrices($productsObjects)
     { // this function not used check all files confirm and delete it
-
         $strike_rate            = 0;
-        $price                  = $productsObjects->mrp;
+        $price                  = $productsObjects->mrp ;
         $today                  = date('Y-m-d');
         /****
          * 1.check product discount is applied via product add/edit
@@ -1171,3 +1189,20 @@ function ccHextobin($hexString)
     }
     return $binString;
 }
+
+function getVolumeMetricCalculation($length, $width, $height)
+{
+    return ($length * $width * $height) / 5000; //it return weight in kg
+}
+
+function formatPhoneNumber($phoneNumber) {
+    // Remove spaces and any special characters including +
+    $phoneNumber = preg_replace('/[^\d]/', '', $phoneNumber);
+    
+    if (strpos($phoneNumber, '91') === 0) {
+        return $phoneNumber; // Already has the 91 prefix
+    } else {
+        return '91' . $phoneNumber; // Add 91 if missing
+    }
+}
+

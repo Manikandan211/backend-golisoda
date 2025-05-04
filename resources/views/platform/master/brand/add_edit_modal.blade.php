@@ -16,6 +16,11 @@
         </button>
     </div>
 </div>
+<style>
+input[type="checkbox"][readonly] {
+    pointer-events: none;
+  }
+</style
 <!--end::Header-->
 <!--begin::Body-->
 <form id="add_brand_form" class="form" action="#" enctype="multipart/form-data">
@@ -30,37 +35,61 @@
                         data-kt-scroll="true" data-kt-scroll-activate="{default: false, lg: true}"
                         data-kt-scroll-max-height="auto" data-kt-scroll-dependencies="#kt_modal_add_user_header"
                         data-kt-scroll-wrappers="#kt_modal_add_user_scroll" data-kt-scroll-offset="300px">
-                      
+
                         <input type="hidden" name="id" value="{{ $info->id ?? '' }}">
                         <input type="hidden" name="from" id="from" value="{{ $from ?? '' }}">
-                      
-                        <div class="fv-row mb-7">
-                            <label class="required fw-bold fs-6 mb-2">Brand Name</label>
-                            <input type="text" name="brand_name" class="form-control form-control-solid mb-3 mb-lg-0"
-                                placeholder="Brand Name" value="{{ $info->brand_name ?? '' }}" />
+
+                        <div class="row mb-7">
+                            <div class="col-md-6">
+                                <label class="required fw-bold fs-6 mb-2">Brand Name</label>
+                                <input type="text" name="brand_name"
+                                    class="form-control form-control-solid mb-3 mb-lg-0 required"
+                                    placeholder="Brand Name" value="{{ $info->brand_name ?? '' }}" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold fs-6 mb-2">Minimum Shipping amount</label>
+                                <input type="text" name="minimum_shipping_amount" id="minimum_shipping_amount"
+                                    class="form-control form-control-solid mb-3 mb-lg-0"
+                                    value="{{ $info->minimum_shipping_amount ?? '' }}">
+                            </div>
+
+                        </div>
+                        <div class="row mb-7">
+                            <div class="col-md-6">
+                                <label class="fw-bold fs-6 mb-2">PAN Number</label>
+                                <input type="text" name="pan_no"
+                                    class="form-control form-control-solid mb-3 mb-lg-0"
+                                    placeholder="PAN Number" value="{{ $info->pan_no ?? '' }}" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold fs-6 mb-2">GSTIN Number</label>
+                                <input type="text" name="gstin_no"
+                                    class="form-control form-control-solid mb-3 mb-lg-0"
+                                    placeholder="GSTIN Number" value="{{ $info->gstin_no ?? '' }}" />
+                            </div>
                         </div>
                         <div class="row mb-7">
                             <div class="col-md-6">
 
                                 <div class="mb-7">
-                                    <label class="d-block fw-bold fs-6 mb-5">Brand Log</label>
+                                    <label class="d-block fw-bold fs-6 mb-5">Logo</label>
                                     <div class="form-text">
                                         Allowed file types: png, jpg,
                                         jpeg.
                                     </div>
                                 </div>
                                 <input id="image_remove_logo" type="hidden" name="image_remove_logo" value="no">
-                                <div class="image-input image-input-outline manual-image-logo" data-kt-image-input="true"
+                                <div class="image-input image-input-outline manual-image-logo"
+                                    data-kt-image-input="true"
                                     style="background-image: url({{ asset('userImage/no_Image.jpg') }})">
                                     @if ($info->brand_logo ?? '')
-                                    @php
-                                        $brandLogoPath = 'brands/'.$info->id.'/option1/'.$info->brand_logo;
-                                        $url = Storage::url($brandLogoPath);
-                                        $path = asset($url);
-                                    @endphp     
+                                        @php
+                                            $brandLogoPath = 'brands/' . $info->id . '/option1/' . $info->brand_logo;
+                                            $url = Storage::url($brandLogoPath);
+                                            $path = asset($url);
+                                        @endphp
                                         <div class="image-input-wrapper w-125px h-125px manual-image-logo"
-                                            id="manual-image-logo"
-                                            style="background-image: url({{ asset($path) }});">
+                                            id="manual-image-logo" style="background-image: url({{ asset($path) }});">
                                         </div>
                                     @else
                                         <div class="image-input-wrapper w-125px h-125px manual-image-logo"
@@ -95,41 +124,101 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="fw-bold fs-6 mb-2">Short Description</label>
-                                <textarea class="form-control form-control-solid mb-3 mb-lg-0" placeholder="Short Description" name="short_description" id="short_description" cols="30" rows="2">{{ $info->short_description ?? '' }}</textarea>
+                                <textarea class="form-control form-control-solid mb-3 mb-lg-0" placeholder="Short Description"
+                                    name="short_description" id="short_description" cols="30" rows="2">{{ $info->short_description ?? '' }}</textarea>
                             </div>
-                        
-                           
+
+
                         </div>
-                        
+                        <div class="row mb-7">
+                            <div class="col-md-6">
+                                <label class="required fw-bold fs-6 mb-2">Commission type</label>
+
+                                <div class="form-check form-check-custom form-check-solid">
+                                    <input name="commission_type" class="form-check-input"
+                                        {{ isset($info->commission_type) && !empty($info->commission_type) ? ($info->commission_type == 'fixed' ? 'checked' : '') : '' }}
+                                        type="radio" value="fixed" id="fixed" />
+                                    <label class="form-check-label" for="flexRadioDefault">
+                                        Fixed
+                                    </label>
+                                </div>
+                                <div class="form-check form-check-custom form-check-solid">
+                                    <input name="commission_type" class="form-check-input" type="radio"
+                                        {{ isset($info->commission_type) && !empty($info->commission_type) ? ($info->commission_type == 'percentage' ? 'checked' : '') : '' }}
+                                        value="percentage" id="percentage" />
+                                    <label class="form-check-label" for="flexRadioDefault">
+                                        Percentage
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="required fw-bold fs-6 mb-2">Commission value</label>
+                                <input type="text" name="commission_value"
+                                    class="form-control required form-control-solid mb-3 mb-lg-0"
+                                    placeholder="Commission Value" value="{{ $info->commission_value ?? '' }}" />
+                            </div>
+
+
+                        </div>
                         <div class="row mb-7">
                             <div class="col-md-6">
                                 <label class="fw-bold fs-6 mb-2">Notes</label>
-                                <input type="text" name="notes" id="notes" class="form-control form-control-solid mb-3 mb-lg-0" value="{{ $info->notes ?? '' }}">
+                                <input type="text" name="notes" id="notes"
+                                    class="form-control form-control-solid mb-3 mb-lg-0"
+                                    value="{{ $info->notes ?? '' }}">
                             </div>
                             <div class="col-md-6">
                                 <label class="required fw-bold fs-6 mb-2">Sorting Order</label>
-                                <input type="text" name="order_by" class="form-control form-control-solid mb-3 mb-lg-0 mobile_num"
-                                placeholder="Sorting Order" value="{{ $info->order_by ?? '' }}" />
+                                <input type="text" name="order_by"
+                                    class="form-control required form-control-solid mb-3 mb-lg-0 mobile_num"
+                                    placeholder="Sorting Order" value="{{ $info->order_by ?? '' }}" />
                             </div>
                         </div>
+
+                        @include('platform.master.brand._items')
 
                         <div class="row mb-7">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="fw-bold fs-6 mb-2"> Status </label>
-                                <div class="form-check form-switch form-check-custom form-check-solid fw-bold fs-6 mb-2">
-                                <input class="form-check-input" type="checkbox"  name="status" value="1"  @if( ( isset( $info->status) && $info->status == 'published') || (!isset( $info->status ))) checked @endif />
-                            </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="fw-bold fs-6 mb-2"> Is Top Brand </label>
-                                <div class="form-check form-switch form-check-custom form-check-solid fw-bold fs-6 mb-2">
-                                <input class="form-check-input" type="checkbox"  name="top_brand" value="1"  @if( ( isset( $info->is_top_brand) && $info->is_top_brand == 'yes')) checked @endif />
+                                <div
+                                    class="form-check form-switch form-check-custom form-check-solid fw-bold fs-6 mb-2">
+                                    <input class="form-check-input" type="checkbox" name="status" value="1"
+                                        @if ((isset($info->status) && $info->status == 'published') || !isset($info->status)) checked @endif />
                                 </div>
                             </div>
+                            <div class="col-md-4">
+                                <label class="fw-bold fs-6 mb-2"> Is Top Brand </label>
+                                <div
+                                    class="form-check form-switch form-check-custom form-check-solid fw-bold fs-6 mb-2">
+                                    <input class="form-check-input" type="checkbox" name="top_brand" value="1"
+                                        @if (isset($info->is_top_brand) && $info->is_top_brand == 'yes') checked @endif />
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="fw-bold fs-6 mb-2">Is Free shipping</label>
+                                <div
+                                    class="form-check form-switch form-check-custom form-check-solid fw-bold fs-6 mb-2">
+                                    <input id="is_free_shipping" class="form-check-input" type="checkbox"
+                                        name="is_free_shipping" value="1"
+                                        @if (isset($info->is_free_shipping) && $info->is_free_shipping == 1) checked @endif />
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="fw-bold fs-6 mb-2">Shipping charge bared by Golisoda</label>
+                                <div
+                                    class="form-check form-switch form-check-custom form-check-solid fw-bold fs-6 mb-2">
+                                    <input id="is_shipping_bared_golisoda" class="form-check-input" type="checkbox"
+                                        name="is_shipping_bared_golisoda" value="1"
+                                        @if (isset($info->is_shipping_bared_golisoda) && $info->is_shipping_bared_golisoda == 1) checked @endif />
+                                </div>
+                            </div>
+
+
+
                         </div>
 
 
-                     
+
                     </div>
                 </div>
             </div>
@@ -138,7 +227,8 @@
     <div class="card-footer py-5 text-center" id="kt_activities_footer">
         <div class="text-end px-8">
             <button type="reset" class="btn btn-light me-3" id="discard">Discard</button>
-            <button type="submit" class="btn btn-primary" data-kt-order_status-modal-action="submit">
+            <button type="submit" id="kt_ecommerce_add_brand_submit" class="btn btn-primary"
+                data-kt-order_status-modal-action="submit">
                 <span class="indicator-label">Submit</span>
                 <span class="indicator-progress">Please wait...
                     <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
@@ -154,8 +244,10 @@
         margin: 0;
     }
 </style>
+<script src="{{ asset('assets/js/jquery.validate.min.js') }}"></script>
+<script src="{{ asset('assets/plugins/custom/formrepeater/formrepeater.bundle.js') }}"></script>
 <script>
-     $('.mobile_num').keypress(
+    $('.mobile_num').keypress(
         function(event) {
             if (event.keyCode == 46 || event.keyCode == 8) {
                 //do nothing
@@ -166,8 +258,8 @@
             }
         }
     );
-     document.getElementById('readUrllogo').addEventListener('change', function() {
-        
+    document.getElementById('readUrllogo').addEventListener('change', function() {
+
         if (this.files[0]) {
             var picture = new FileReader();
             picture.readAsDataURL(this.files[0]);
@@ -188,7 +280,7 @@
     });
     //banner image script
     document.getElementById('readUrlbanner').addEventListener('change', function() {
-        
+
         if (this.files[0]) {
             var picture = new FileReader();
             picture.readAsDataURL(this.files[0]);
@@ -237,29 +329,79 @@
         // Init add schedule modal
         var initAddRole = () => {
 
-            // Init form validation rules. For more info check the FormValidation plugin's official documentation:https://formvalidation.io/
-            var validator = FormValidation.formValidation(
-                form, {
-                    fields: {
-                        'brand_name': {
-                            validators: {
-                                notEmpty: {
-                                    message: 'Brand name is required'
-                                }
-                            }
-                        },
-                    },
+            $('#add_brand_form').validate({
+                rules: {
+                    brand_name: "required"
+                },
+                messages: {
+                    brand_name: "Brand name is required",
+                },
 
-                    plugins: {
-                        trigger: new FormValidation.plugins.Trigger(),
-                        bootstrap: new FormValidation.plugins.Bootstrap5({
-                            rowSelector: '.fv-row',
-                            eleInvalidClass: '',
-                            eleValidClass: ''
-                        })
-                    }
+                submitHandler: function(form) {
+                    var from = $('#from').val();
+                    var formData = new FormData(document.getElementById(
+                        "add_brand_form"));
+                    $("#is_free_shipping").removeAttr('disabled');
+                    submitButton.setAttribute('data-kt-indicator', 'on');
+                    // Disable button to avoid multiple click
+                    submitButton.disabled = true;
+                    //call ajax call
+                    $.ajax({
+                        url: add_url,
+                        type: "POST",
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        beforeSend: function() {
+
+                        },
+                        success: function(res) {
+
+                            if (res.error == 1) {
+                                // Remove loading indication
+                                submitButton.removeAttribute(
+                                    'data-kt-indicator');
+                                // Enable button
+                                submitButton.disabled = false;
+                                let error_msg = res.message
+                                Swal.fire({
+                                    text: res.message,
+                                    icon: "error",
+                                    buttonsStyling: false,
+                                    confirmButtonText: "Ok, got it!",
+                                    customClass: {
+                                        confirmButton: "btn btn-primary"
+                                    }
+                                });
+                            } else {
+
+                                if (from != '') {
+                                    getProductBrandDropdown(res.brand_id);
+                                    return false;
+                                }
+                                dtTable.ajax.reload();
+                                Swal.fire({
+                                    text: res.message,
+                                    icon: "success",
+                                    buttonsStyling: false,
+                                    confirmButtonText: "Ok, got it!",
+                                    customClass: {
+                                        confirmButton: "btn btn-primary"
+                                    }
+                                }).then(function(result) {
+                                    if (result
+                                        .isConfirmed) {
+                                        commonDrawer
+                                            .hide();
+
+                                    }
+                                });
+                            }
+                        }
+                    });
                 }
-            );
+            });
+
 
             // Cancel button handler
             const cancelButton = element.querySelector('#discard');
@@ -286,90 +428,7 @@
 
             // Submit button handler
             const submitButton = element.querySelector('[data-kt-order_status-modal-action="submit"]');
-            // submitButton.addEventListener('click', function(e) {
-            $('#add_brand_form').submit(function(e) {
-                // Prevent default button action
-                e.preventDefault();
-                // Validate form before submit
-                if (validator) {
-                    validator.validate().then(function(status) {
-                        if (status == 'Valid') {
-                            var from = $('#from').val();
-                            var formData = new FormData(document.getElementById("add_brand_form"));
-                            submitButton.setAttribute('data-kt-indicator', 'on');
-                            // Disable button to avoid multiple click 
-                            submitButton.disabled = true;
 
-                            //call ajax call
-                            $.ajax({
-                                url: add_url,
-                                type: "POST",
-                                data: formData,
-                                processData: false,
-                                contentType: false,
-                                beforeSend: function() {
-                                    
-                                },
-                                success: function(res) {
-
-                                    if (res.error == 1) {
-                                        // Remove loading indication
-                                        submitButton.removeAttribute(
-                                            'data-kt-indicator');
-                                        // Enable button
-                                        submitButton.disabled = false;
-                                        let error_msg = res.message
-                                        Swal.fire({
-                                            text: res.message,
-                                            icon: "error",
-                                            buttonsStyling: false,
-                                            confirmButtonText: "Ok, got it!",
-                                            customClass: {
-                                                confirmButton: "btn btn-primary"
-                                            }
-                                        });
-                                    } else { 
-                                        
-                                        if( from != '' ) {
-                                            getProductBrandDropdown(res.brand_id);
-                                            return false;
-                                        }
-                                        dtTable.ajax.reload();
-                                        Swal.fire({
-                                            text: res.message,
-                                            icon: "success",
-                                            buttonsStyling: false,
-                                            confirmButtonText: "Ok, got it!",
-                                            customClass: {
-                                                confirmButton: "btn btn-primary"
-                                            }
-                                        }).then(function(result) {
-                                            if (result
-                                                .isConfirmed) {
-                                                commonDrawer
-                                                    .hide();
-
-                                            }
-                                        });
-                                    }
-                                }
-                            });
-
-                        } else {
-                            // Show popup warning. For more info check the plugin's official documentation: https://sweetalert2.github.io/
-                            Swal.fire({
-                                text: "Sorry, looks like there are some errors detected, please try again.",
-                                icon: "error",
-                                buttonsStyling: false,
-                                confirmButtonText: "Ok, got it!",
-                                customClass: {
-                                    confirmButton: "btn btn-primary"
-                                }
-                            });
-                        }
-                    });
-                }
-            });
         }
 
         return {
@@ -385,5 +444,56 @@
         KTUsersAddRole.init();
     });
 
-   
+    $(document).ready(function() {
+        $('#kt_ecommerce_add_brand_submit').click(function() {
+            console.log('click function called');
+            $("[data-repeater-list='kt_docs_repeater_basic']").closest('div').each(function() {
+                console.log('closest div called');
+                var $row = $(this);
+                var $checkbox = $row.find('.is-default-checkbox:first');
+                var $checkboxes = $row.find('.is-default-checkbox');
+                var hasChecked = false;
+                $checkboxes.each(function() {
+                    if ($(this).prop('checked')) {
+                        hasChecked = true;
+                        return false;
+                    }
+                });
+                if (!hasChecked) {
+                    $checkbox.addClass('required');
+                } else {
+                    $checkbox.removeClass('required');
+                }
+
+                // Apply CSS styles to other elements within the row
+                $row.find('.form-control.amount.required').css('width', '145px');
+                $row.find(
+                    '.amount.border.border-secondary.btn.btn-icon.btn-flex.btn-light-danger'
+                ).css({
+                    'margin-top': '-61px',
+                    'margin-left': '230px'
+                });
+            });
+        });
+        const isFreeShippingCheckbox = $('#is_free_shipping');
+        const isShippingBaredGolisodaCheckbox = $('#is_shipping_bared_golisoda');
+
+        isShippingBaredGolisodaCheckbox.change(function() {
+            if ($(this).is(':checked')) {
+                isFreeShippingCheckbox.prop('checked', true);
+                isFreeShippingCheckbox.prop('readonly',
+                true); // Disable the checkbox to prevent user from unchecking it
+            } else {
+                isFreeShippingCheckbox.prop('readonly',
+                false); // Enable the checkbox if is_shipping_bared_golisoda is unchecked
+            }
+        });
+
+        // Ensure initial state is handled in case of page reload
+        if (isShippingBaredGolisodaCheckbox.is(':checked')) {
+            isFreeShippingCheckbox.prop('checked', true);
+            isFreeShippingCheckbox.prop('readonly', true);
+        }
+    });
+
 </script>

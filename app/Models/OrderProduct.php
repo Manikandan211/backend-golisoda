@@ -25,11 +25,20 @@ class OrderProduct extends Model
         'discount_price',
         'tax_amount',
         'tax_percentage',
-        'sub_total'
+        'sub_total',
+        'coupon_id'
     ];
 
     public function products()
     {
         return $this->hasOne(Product::class, 'id', 'product_id')->withTrashed();
+    }
+
+    public function chosenVariation(){
+        return $this->hasMany(OrderProductVariationOption::class, 'order_product_id', 'id');
+    }
+
+    public function vendorTracking(){
+        return $this->hasOne(BrandOrder::class, 'order_product_id', 'id');
     }
 }
